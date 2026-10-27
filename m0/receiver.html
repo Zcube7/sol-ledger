@@ -16,9 +16,9 @@
 </head>
 <body>
 <h1>M0 本机接收页</h1>
-<p class="dim">这个页面只在你自己电脑上运行（127.0.0.1）。它接收 SolLedger 扩展（或书签 A / B）交过来的报告，存在本页的浏览器存储里，
-用来测试「扩展 / 书签 → 我们的网页」这一步交接（W7），并在本机比对好友 ID 和对局队友 ID 是不是同一套（W6）。
-哈希只在这里用，不会出现在下载的报告里。看完 W6 就点下面的「清空本页数据」，别让哈希一直留在浏览器里。</p>
+<p class="dim">这个页面只在你自己电脑上运行（127.0.0.1）。它接收 SolLedger 扩展（或书签）交过来的报告，存在本页的浏览器存储里，
+用来测试「扩展 / 书签 → 我们的网页」这一步交接（W7）。队友 ID 的代号只存在这里，不会出现在下载的报告里；看完就点下面的「清空本页数据」。
+验证 B（官方周报页，W4~W6）暂缓。</p>
 
 <div class="card" id="status">等待交接……（装了 SolLedger 扩展的话会自动读取；用书签的话，在书签面板里点「测试交接（W7）」）</div>
 
@@ -38,7 +38,7 @@
 (function () {
   'use strict';
   var params = new URLSearchParams(location.search);
-  var ALLOWED = ['https://www.wegame.com.cn', 'https://df.qq.com'];
+  var ALLOWED = ['https://www.wegame.com.cn'];
   if (params.get('test') === '1') ALLOWED.push('http://127.0.0.1:8770');   // 只给本地模拟环境用
   var KEY = 'dfp-m0-store';
 
@@ -56,9 +56,8 @@
   function render() {
     var s = load();
     document.querySelector('#results tbody').textContent = '';
-    var A = s.A && s.A.report, B = s.B && s.B.report;
-    row('W7 交接：书签 A', s.A ? '已收到（' + s.A.at + '，来自 ' + s.A.from + '）' : '未收到', s.A ? 'ok' : 'dim');
-    row('W7 交接：书签 B', s.B ? '已收到（' + s.B.at + '，来自 ' + s.B.from + '）' : '未收到', s.B ? 'ok' : 'dim');
+    var A = s.A && s.A.report;
+    row('W7 交接：验证 A', s.A ? '已收到（' + s.A.at + '，来自 ' + s.A.from + '）' : '未收到', s.A ? 'ok' : 'dim');
     if (A && A.findings && A.findings.W1) {
       var w1 = A.findings.W1, okN = Object.keys(w1).filter(function (k) { return w1[k] === 'ok'; }).length;
       row('W1 接口调通', okN + '/7 ' + JSON.stringify(w1), okN === 7 ? 'ok' : 'warn');
@@ -72,31 +71,14 @@
       var w = A.findings.battleList.window || {};
       row('W3 战绩翻页', w.cursorField ? ('游标=第' + w.cursorFromIndex + '条的 ' + w.cursorField + '，共 ' + w.uniqueMatches + ' 局，跨 ' + w.spanHours + ' 小时，停止原因 ' + w.stop) : '没试出游标', w.cursorField ? 'ok' : 'warn');
     }
-    if (B && B.findings && B.findings.W4) row('W4 借用 Milo', B.findings.W4.miloEmit ? '可以' : '不行', B.findings.W4.miloEmit ? 'ok' : 'err');
-    if (B && B.findings && B.findings.W5) row('W5 各方法取数', JSON.stringify(B.findings.W5), 'dim');
-    if (s.A && s.B) {
-      var uniq = function (a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); };   // 去重：同一个人只算一次
-      var t = uniq(s.A.privateOnly && s.A.privateOnly.teammateIdHashes || []);
-      var f = uniq(s.B.privateOnly && s.B.privateOnly.friendIdHashes || []);
-      var hit = t.filter(function (h) { return f.indexOf(h) >= 0; }).length;
-      // 重合 0 不等于「不是同一套」：最近几局里可能恰好没有好友。所以把两边 ID 的形态（位数）也摆出来对照
-      var kinds = function (h) { return h ? Object.keys(h).join(' / ') : '未知'; };
-      var dk = A && A.findings && A.findings.battleDetail && A.findings.battleDetail[0];
-      var fk = B && B.findings && B.findings.friendRecord;
-      // 扩展交来的是带本机密钥的代号，书签交来的是原始哈希：两边来自不同通道就没法比
-      var viaExt = function (x) { return x.from === 'SolLedger 扩展'; };
-      if (viaExt(s.A) !== viaExt(s.B)) {
-        row('W6 好友 ID 与队友 ID 是否同一套', 'A、B 一份来自扩展、一份来自书签，ID 代号的算法不同，没法比。请都用扩展（或都用书签）重跑一遍。', 'warn');
-      } else {
-        row('W6 好友 ID 与队友 ID 是否同一套', '队友 ' + t.length + ' 个、好友 ' + f.length + ' 个，重合 ' + hit + ' 个' +
-          (hit ? '（至少有一部分是同一套 ID）' : '（没有重合：可能不是同一套，也可能最近几局里恰好没有好友，需要再看）') +
-          '；ID 形态：队友 ' + kinds(dk && dk.idKinds) + '，好友 ' + kinds(fk && fk.friendIdKinds), hit ? 'ok' : 'warn');
-      }
+    if (s.A) {
+      var t = (s.A.privateOnly && s.A.privateOnly.teammateIdHashes) || [];
+      var uniqN = t.filter(function (x, i) { return t.indexOf(x) === i; }).length;   // 去重：同一个人只算一次
+      row('队友（本机代号）', '最近几局里一起组队的有 ' + uniqN + ' 人（代号只存在本页，用来以后算「和谁组队」）', uniqN ? 'ok' : 'dim');
     }
-    if (A) row('书签 A 停止原因', A.stop || '正常跑完', A.stop ? 'warn' : 'ok');
-    if (B) row('书签 B 停止原因', B.stop || '正常跑完', B.stop ? 'warn' : 'ok');
+    if (A) row('验证 A 停止原因', A.stop || '正常跑完', A.stop ? 'warn' : 'ok');
     var pub = {};
-    if (A) pub.A = A; if (B) pub.B = B;
+    if (A) pub.A = A;
     document.getElementById('raw').textContent = Object.keys(pub).length ? JSON.stringify(pub, null, 2) : '（还没有）';
   }
 
@@ -106,7 +88,7 @@
     var data = e.data;
     if (!data || data.type !== 'dfp-report' || !data.payload) return;
     var p = data.payload;
-    if (p.probe !== 'A' && p.probe !== 'B') return;
+    if (p.probe !== 'A') return;
     if (!p.report || p.report.tool !== 'sol-ledger-m0') return;
     var s = load();
     s[p.probe] = { at: new Date().toLocaleString(), from: e.origin, report: p.report, privateOnly: p.privateOnly || {} };
@@ -136,15 +118,15 @@
       var resp = x && x.resp;
       if (!resp || x.error) { setStatus('扩展没有回应：' + ((x && x.error) || '未知原因'), 'warn'); return; }
       var s = load(), got = [];
-      ['A', 'B'].forEach(function (p) {
+      ['A'].forEach(function (p) {
         var r = resp[p];
         if (!r || !r.report || r.report.tool !== 'sol-ledger-m0') return;
         s[p] = { at: new Date(r.at || Date.now()).toLocaleString(), from: 'SolLedger 扩展', report: r.report, privateOnly: r.privateOnly || {} };
         got.push(p);
       });
       save(s);
-      setStatus(got.length ? '已从 SolLedger 扩展读到书签 ' + got.join('、') + ' 的报告。'
-        : '扩展已连接，但里面还没有报告：先在扩展弹窗里点「跑验证 A / B」，再点「从扩展重新读取」。', got.length ? 'ok' : 'warn');
+      setStatus(got.length ? '已从 SolLedger 扩展读到验证 ' + got.join('、') + ' 的报告。'
+        : '扩展已连接，但里面还没有报告：先在扩展弹窗里点「跑验证 A」，再点「从扩展重新读取」。', got.length ? 'ok' : 'warn');
       render();
     });
   }
@@ -170,7 +152,7 @@
 
   document.getElementById('download').addEventListener('click', function () {
     var s = load(), pub = {};
-    if (s.A) pub.A = s.A.report; if (s.B) pub.B = s.B.report;
+    if (s.A) pub.A = s.A.report;
     var url = URL.createObjectURL(new Blob([JSON.stringify(pub, null, 2)], { type: 'application/json' }));
     var a = document.createElement('a'); a.href = url; a.download = 'm0-combined.json'; a.click();
     setTimeout(function () { URL.revokeObjectURL(url); }, 5000);

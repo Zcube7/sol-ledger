@@ -1,7 +1,7 @@
 /* ============================================================================
  * SolLedger 数据助手 · 后台（MV3 service worker）
  *
- * 做的事：用户在扩展弹窗里点「跑验证」时，在官方页面里跑取数脚本（和书签 A / B 同一份代码），
+ * 做的事：用户在扩展弹窗里点「跑验证」时，在官方页面里跑取数脚本（和书签同一份代码；现在只有 A，验证 B 暂缓），
  * 把「只含结构的报告」和仅本机用的哈希存进扩展自己的存储；我们的网站只能来读（哈希换成带本机密钥的代号）和清空，
  * 不能发起取数。
  *
@@ -10,13 +10,14 @@
  * ========================================================================== */
 import { CONFIG } from './config.js';
 
+const PROBES = Object.keys(CONFIG.targets);   // 现在只有 'A'
 const running = new Map();   // probe -> Promise，同一个书签同时只跑一份
 let clearGen = 0;            // 每清空一次加 1：清空之前就开始跑的那次，跑完不再把结果写回来
 
 // 全局变量在 service worker 被停掉时会丢。浏览器关掉重开、扩展被重新加载、后台被回收之后，
 // 存储里残留的「正在跑」其实已经没人在跑了：后台每次启动时把它改成「中断」，否则弹窗的「跑验证」按钮一直是灰的
-chrome.storage.local.get(['status_A', 'status_B']).then(s => {
-  for (const p of ['A', 'B']) {
+chrome.storage.local.get(PROBES.map(p => `status_${p}`)).then(s => {
+  for (const p of PROBES) {
     const st = s[`status_${p}`];
     if (st && st.state === 'running' && !running.has(p)) setStatus(p, { state: 'error', error: 'interrupted' });
   }
@@ -66,7 +67,7 @@ function sanitize(probe, out) {
   return {
     report: JSON.parse(json),
     leaked: Number.isInteger(out.leaked) ? out.leaked : null,
-    privateOnly: probe === 'A' ? { teammateIdHashes: hashes(p.teammateIdHashes) } : { friendIdHashes: hashes(p.friendIdHashes) },
+    privateOnly: { teammateIdHashes: hashes(p.teammateIdHashes) },
   };
 }
 
@@ -124,8 +125,8 @@ async function run(probe, query) {
 }
 
 async function getReports() {
-  const s = await chrome.storage.local.get(['result_A', 'result_B']);
-  return { A: s.result_A || null, B: s.result_B || null };
+  const s = await chrome.storage.local.get(PROBES.map(p => `result_${p}`));
+  return Object.fromEntries(PROBES.map(p => [p, s[`result_${p}`] || null]));
 }
 
 /** 消息只收两处来的：扩展自己的弹窗，和我们自己的网站（site-bridge.js 只注入在那里） */
@@ -142,7 +143,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   const reply = p => { p.then(sendResponse, e => sendResponse({ error: String(e && e.message || e) })); return true; };
   // 取数会用用户的登录态向官方连发约 25 个请求、还会把官方页切到前台：只许用户在扩展弹窗里亲手点。
   // 网站一侧（同源的其他页面、页面里的第三方脚本、别的扩展的 content script 都能借 site-bridge 发消息）只能读和清
-  if (msg.type === 'run' && kind === 'popup' && (msg.probe === 'A' || msg.probe === 'B')) {
+  if (msg.type === 'run' && kind === 'popup' && PROBES.includes(msg.probe)) {
     // 测试参数（?captcha=paging 之类）只在开发版里生效，正式版一律忽略
     const query = CONFIG.dev && typeof msg.query === 'string' && /^\?[\w=&]{0,60}$/.test(msg.query) ? msg.query : '';
     return reply(run(msg.probe, query));
@@ -150,7 +151,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
   if (msg.type === 'get-reports') return reply(getReports().then(r => (kind === 'site' ? forSite(r) : r)));
   // 清空只清报告和状态，给网站算代号用的随机密钥留着：不然接收页里留着的旧 A 和新跑的 B 代号对不上，W6 会误报 0 重合
   if (msg.type === 'clear') clearGen += 1;
-  if (msg.type === 'clear') return reply(chrome.storage.local.remove(['status_A', 'status_B', 'result_A', 'result_B']).then(() => ({ ok: true })));
+  if (msg.type === 'clear') return reply(chrome.storage.local.remove(PROBES.flatMap(p => [`status_${p}`, `result_${p}`])).then(() => ({ ok: true })));
   return false;
 });
 
@@ -171,5 +172,5 @@ async function forSite(r) {
   const key = await siteKey();
   const alias = async h => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(key + '|' + h))).slice(0, 6), b => b.toString(16).padStart(2, '0')).join('');
   const relabel = async (x, k) => x && Object.assign({}, x, { privateOnly: { [k]: await Promise.all(((x.privateOnly && x.privateOnly[k]) || []).map(alias)) } });
-  return { A: await relabel(r.A, 'teammateIdHashes'), B: await relabel(r.B, 'friendIdHashes') };
+  return { A: await relabel(r.A, 'teammateIdHashes') };
 }

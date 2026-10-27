@@ -147,11 +147,6 @@ function dfpCookieFlag(name) {
   return hit ? hit.slice(name.length + 1) : null;
 }
 
-/** 只判断某个 Cookie 名字是否存在，不读值 */
-function dfpCookiePresent(name) {
-  return document.cookie.split('; ').some(c => c.startsWith(name + '='));
-}
-
 /** SHA-256 前 12 位十六进制（只用于交给本机接收页做重合比对，不进复制 / 下载的报告） */
 async function dfpHash12(text) {
   const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode('dfp-m0|' + text));

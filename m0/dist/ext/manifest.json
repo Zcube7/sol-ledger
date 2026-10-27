@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "SolLedger 数据助手（M0 验证）",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "在三角洲行动官方页面里查你自己的烽火地带数据，只导出数据结构，不读取登录凭据。非官方工具。",
   "minimum_chrome_version": "110",
   "permissions": [
@@ -9,8 +9,7 @@
     "storage"
   ],
   "host_permissions": [
-    "https://www.wegame.com.cn/helper/df/*",
-    "https://df.qq.com/cp/*"
+    "https://www.wegame.com.cn/helper/df/*"
   ],
   "background": {
     "service_worker": "background.js",

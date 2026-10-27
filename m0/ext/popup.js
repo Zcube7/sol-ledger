@@ -2,13 +2,9 @@
 import { CONFIG } from './config.js';
 
 const STOP_TEXT = {
-  captcha: '官方要求人机校验，已停止',
-  captcha_or_timeout: '官方 15 秒没回应（多半弹了验证码或登录框），已停止',
-  not_login: '官方说未登录或登录已过期：WeGame 页面请到 www.wegame.com.cn 右上角退出后重新登录，周报页请重新登录，然后再点一次',
-  no_role: '没取到角色信息',
-  no_milo: '页面上没有 Milo（确认是官方周报页）',
-  noOapI_101_after_kfxjwh_ok: '个人中心那组方法返回 101（这是要验证的结果之一，不用重新登录）',
-  milo_fail: '官方请求失败，已停止',
+  captcha: '官方要求人机校验，已停止：按 F5 刷新 WeGame 助手页面，完成验证码后再点一次',
+  not_login: '官方说未登录或登录已过期：到 www.wegame.com.cn 右上角退出后用 QQ 重新登录，再点一次',
+  no_role: '没取到角色信息：确认登录的是玩三角洲的那个号',
 };
 
 document.getElementById('ver').textContent = 'v' + chrome.runtime.getManifest().version + (CONFIG.dev ? ' 开发版' : '');
@@ -27,9 +23,12 @@ const ERROR_TEXT = {
 // 顺手叫醒后台：它启动时会把残留的「正在跑」改成「中断」（不需要回复）
 chrome.runtime.sendMessage({ type: 'ping' }).catch(() => {});
 
+// 验证项以页面上的卡片为准（现在只有 A；验证 B 暂缓）
+const PROBES = [...document.querySelectorAll('.card[data-probe]')].map(c => c.getAttribute('data-probe'));
+
 async function render() {
-  const s = await chrome.storage.local.get(['status_A', 'status_B', 'result_A', 'result_B']);
-  for (const probe of ['A', 'B']) {
+  const s = await chrome.storage.local.get(PROBES.flatMap(p => [`status_${p}`, `result_${p}`]));
+  for (const probe of PROBES) {
     const card = document.querySelector(`.card[data-probe="${probe}"]`);
     const st = s[`status_${probe}`];
     const res = s[`result_${probe}`];

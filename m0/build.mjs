@@ -1,7 +1,9 @@
-// 把 src/ 里的源码拼成两个书签、两个扩展包，并生成安装页 dist/install.html。
-//   dist/bookmarklet-A.js / B.js   书签（备用）
+// 把 src/ 里的源码拼成书签、两个扩展包，并生成安装页 dist/install.html。
+//   dist/bookmarklet-A.js          书签（备用）
 //   dist/ext/                      扩展正式版：只能在官方页面上跑（在 Chrome / Edge 里「加载解压缩的扩展」选这个目录）
 //   dist/ext-dev/                  扩展开发版：多了本地模拟环境 127.0.0.1:8770，只给自动化测试用，不进仓库
+// 验证 B（官方周报页）2026-10-27 起暂缓：周报页是手机竖屏页面，电脑上要把窗口调成竖长才能登录。
+// 它的代码在提交 16a04da 里（m0/src/probe-ams.js 等），要恢复从那里取。
 // 用法：node m0/build.mjs
 import { readFileSync, writeFileSync, mkdirSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
@@ -17,29 +19,22 @@ mkdirSync(dist, { recursive: true });
 const common = src('common.js');
 const probes = [
   { id: 'A', file: 'probe-wegame.js', title: 'M0-A WeGame', page: 'https://www.wegame.com.cn/helper/df/score/' },
-  { id: 'B', file: 'probe-ams.js', title: 'M0-B 周报页', page: 'https://df.qq.com/cp/weekly20250821/index.html' },
 ];
 
 /* ---------- 扩展：正式版 + 开发版 ---------- */
-const EXT_VERSION = '0.1.0';
+const EXT_VERSION = '0.2.0';
 // 只有本机接收页。zcube7.github.io 和其他 Pages 项目共用一个 origin，网站上线时要换专用域名再加进来（同时改 content_scripts 的 matches）
 const SITE_ORIGINS = ['http://127.0.0.1:8766'];
 const variants = [
   {
     dir: 'ext', dev: false, name: 'SolLedger 数据助手（M0 验证）',
-    targets: {
-      A: { url: probes[0].page, match: 'https://www.wegame.com.cn/helper/df/score/*' },
-      B: { url: probes[1].page, match: 'https://df.qq.com/cp/weekly20250821/*' },
-    },
-    hosts: ['https://www.wegame.com.cn/helper/df/*', 'https://df.qq.com/cp/*'],
+    targets: { A: { url: probes[0].page, match: 'https://www.wegame.com.cn/helper/df/score/*' } },
+    hosts: ['https://www.wegame.com.cn/helper/df/*'],
   },
   {
     dir: 'ext-dev', dev: true, name: 'SolLedger 数据助手（开发版）',
-    targets: {
-      A: { url: 'http://127.0.0.1:8770/helper/df/score/', match: 'http://127.0.0.1:8770/helper/df/score/*' },
-      B: { url: 'http://127.0.0.1:8770/cp/weekly/', match: 'http://127.0.0.1:8770/cp/weekly/*' },
-    },
-    hosts: ['https://www.wegame.com.cn/helper/df/*', 'https://df.qq.com/cp/*', 'http://127.0.0.1:8770/*'],
+    targets: { A: { url: 'http://127.0.0.1:8770/helper/df/score/', match: 'http://127.0.0.1:8770/helper/df/score/*' } },
+    hosts: ['https://www.wegame.com.cn/helper/df/*', 'http://127.0.0.1:8770/*'],
   },
 ];
 for (const v of variants) {
@@ -74,6 +69,9 @@ for (const v of variants) {
   }
 }
 
+// 上一版的书签 B 构建产物不要留在 dist/ 里
+rmSync(join(dist, 'bookmarklet-B.js'), { force: true });
+
 const built = probes.map(p => {
   // 整段包进一个 async 函数：源码里顶层的 return / await 都在这个函数里
   const code = `(async () => {\nconst DFP_MODE = 'bookmarklet';\n${common}\n${src(p.file)}\n})().catch(e => { window.__DFP_RUNNING = false; alert('M0 验证出错：' + (e && e.message || e)); });\n`;
@@ -83,6 +81,7 @@ const built = probes.map(p => {
   const version = (src(p.file).match(/DFP_VERSION = '([^']+)'/) || [])[1];
   return { ...p, href, sha, version, bytes: Buffer.byteLength(code), hrefLen: href.length };
 });
+const A = built[0];
 
 const esc = s => s.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 const html = `<!doctype html>
@@ -95,7 +94,7 @@ code{background:#f3f4f6;padding:1px 5px;border-radius:4px} .dim{color:#6b7280;fo
 ol li{margin:6px 0} .box{border:1px solid #e5e7eb;border-radius:8px;padding:10px 14px;margin:10px 0}
 </style></head><body>
 <h1>M0 验证工具 · 安装与使用</h1>
-<p>这个工具（扩展或书签，取数代码是同一份）只做一件事：在<strong>官方页面里</strong>查一遍你自己的烽火数据，把「数据长什么样」
+<p>这个工具（扩展或书签，取数代码是同一份）只做一件事：在 <strong>WeGame 助手页面里</strong>查一遍你自己的烽火数据，把「数据长什么样」
 （字段名、类型、条数、错误码）整理成报告。报告里<strong>没有</strong>你的 ID、昵称、战绩数值，也没有任何登录凭据；
 脚本不读、不发任何 Cookie 值或 token。复制或下载的报告发给我就行。</p>
 
@@ -105,50 +104,33 @@ ol li{margin:6px 0} .box{border:1px solid #e5e7eb;border-radius:8px;padding:10px
 <li>Chrome 打开 <code>chrome://extensions</code>，Edge 打开 <code>edge://extensions</code>，打开「开发者模式」（Edge 叫「开发人员模式」）开关。</li>
 <li>点「加载已解压的扩展程序」（Edge 叫「加载解压缩的扩展」），选上面那个文件夹：要选到<strong>里面直接就有 manifest.json</strong> 的那一层，多套一层会提示「清单文件缺失」。</li>
 <li>点地址栏右边的拼图图标（扩展），把「SolLedger 数据助手」固定到工具栏：Chrome 点它旁边的图钉，Edge 点它旁边的眼睛图标。</li>
-<li>点这个图标，先「跑验证 A」、再「跑验证 B」。扩展会自己打开对应的官方页面：没登录的话先在那里用 <strong>QQ 号</strong>登录，再点一次。各自跑完后点「复制报告」发给我。</li>
-<li>（可选）W6、W7：在本项目目录运行 <code>node m0/serve.mjs</code>，在扩展弹窗里点「打开本机接收页」，接收页会自动从扩展读到两份报告。看完点「清空本页数据」。</li>
+<li>点这个图标，再点「跑验证 A」。扩展会自己打开 WeGame 助手页面：没登录的话先在那里用 <strong>QQ 号</strong>登录，再点一次。跑完后点「复制报告」发给我。</li>
+<li>（可选）W7：在本项目目录运行 <code>node m0/serve.mjs</code>，在扩展弹窗里点「打开本机接收页」，接收页会自动从扩展读到报告。看完点「清空本页数据」。</li>
 </ol>
 <p class="dim">浏览器启动时可能提示关闭开发者模式下的扩展：所有不从应用商店装的扩展都会这样提示，关掉这个提示就行，不要选关闭扩展（选了的话回扩展页把它的开关重新打开）。不用了随时在扩展页里关掉或移除。</p>
 
 <h2>备用：书签（不想装扩展时用）</h2>
 <h3>1. 安装</h3>
-<p>用 <strong>Chrome 或 Edge</strong> 打开本页，先按 <code>Ctrl+Shift+B</code> 显示书签栏，再把下面两个按钮<strong>拖</strong>到书签栏上（不要点）：</p>
-${built.map(b => `<a class="bm" href="${esc(b.href)}">${b.title}</a>`).join('\n')}
+<p>用 <strong>Chrome 或 Edge</strong> 打开本页，先按 <code>Ctrl+Shift+B</code> 显示书签栏，再把下面的按钮<strong>拖</strong>到书签栏上（不要点）：</p>
+<a class="bm" href="${esc(A.href)}">${A.title}</a>
 <div class="box dim">
-${built.map(b => `${b.title}：版本 ${b.version}，${b.bytes} 字节，SHA-256 <code>${b.sha.slice(0, 16)}…</code>（完整源码见 dist/bookmarklet-${b.id}.js）`).join('<br>\n')}
+${A.title}：版本 ${A.version}，${A.bytes} 字节，SHA-256 <code>${A.sha.slice(0, 16)}…</code>（完整源码见 dist/bookmarklet-A.js）
 </div>
 
-<h3>2. 跑书签 A（WeGame 助手）</h3>
+<h3>2. 跑书签（WeGame 助手）</h3>
 <ol>
-<li>打开 <a href="${built[0].page}" target="_blank" rel="noopener">${built[0].page}</a>，用你的 <strong>QQ 号</strong>登录，确认能看到自己的烽火战绩。</li>
-<li>点书签栏上的 <strong>${built[0].title}</strong>。右上角会出现面板，大约 40 秒跑完（最多约 25 次请求，每次间隔 1~1.5 秒）。<strong>只点一次</strong>，跑完之前不要刷新页面。</li>
+<li>打开 <a href="${A.page}" target="_blank" rel="noopener">${A.page}</a>，用你的 <strong>QQ 号</strong>登录，确认能看到自己的烽火战绩。</li>
+<li>点书签栏上的 <strong>${A.title}</strong>。右上角会出现面板，大约 40 秒跑完（最多约 25 次请求，每次间隔 1~1.5 秒）。<strong>只点一次</strong>，跑完之前不要刷新页面。</li>
 <li>面板显示「完成」后点<strong>复制报告</strong>，粘贴给我（或点下载报告，把文件发给我）。</li>
-</ol>
-
-<h3>3. 跑书签 B（官方周报页）</h3>
-<ol>
-<li>打开 <a href="${built[1].page}" target="_blank" rel="noopener">${built[1].page}</a>，用同一个 <strong>QQ 号</strong>登录，确认能看到周报。</li>
-<li>点书签栏上的 <strong>${built[1].title}</strong>，等面板显示「完成」（大约 10 秒），同样复制报告发给我。</li>
-<li>如果页面弹出「选择大区 / 角色」之类的窗口，<strong>直接关掉，不要点提交</strong>：书签只读数据，不需要绑定任何东西。</li>
-</ol>
-
-<h3>4.（可选）W6、W7：交接给本机接收页</h3>
-<ol>
-<li>在本项目目录运行 <code>node m0/serve.mjs</code>（只在 127.0.0.1 上监听）。</li>
-<li>分别在书签 A、书签 B 的面板里点 <strong>测试交接（W7）</strong>，浏览器会打开本机接收页。</li>
-<li>接收页会显示 A、B 两份结果，以及「好友 ID 和对局队友 ID 有没有重合」（W6，只在你电脑上比对哈希）。</li>
-<li>看完后在接收页点「清空本页数据」。</li>
+<li>（可选）W7：先运行 <code>node m0/serve.mjs</code>，再在面板里点 <strong>测试交接（W7）</strong>，浏览器会打开本机接收页。看完后在接收页点「清空本页数据」。</li>
 </ol>
 
 <h2>遇到这些情况（扩展、书签都适用）</h2>
 <ul>
-<li>面板说「未登录」：先在官方页面登录 QQ，再点书签。</li>
-<li>面板说「人机校验（8000022）」：脚本已经停了，不会重试。按 <code>F5</code> 刷新 WeGame 助手页面，如果弹出验证码就按提示完成，能正常看到自己的战绩后再点书签。</li>
-<li>书签 B 说「15 秒没有回应」：多半是官方弹了验证码或登录框。脚本已经停了；在页面上完成验证 / 登录，刷新后再点一次书签。</li>
-<li>书签 B 说「NoOapI 这组方法返回 101」：这是我们要验证的结果之一，不用重新登录，直接把报告发给我。</li>
-<li>书签 B 说「没有可用的 Milo」：确认打开的是上面那个周报页地址。</li>
+<li>面板说「未登录或登录已过期」，或者生涯页只显示「无角色信息」：打开 <a href="https://www.wegame.com.cn/" target="_blank" rel="noopener">www.wegame.com.cn</a>，在右上角退出后用 QQ 重新登录，回到生涯页刷新、能看到自己的战绩后再跑。</li>
+<li>面板说「人机校验（8000022）」：脚本已经停了，不会重试。按 <code>F5</code> 刷新 WeGame 助手页面，如果弹出验证码就按提示完成，能正常看到自己的战绩后再跑。</li>
 </ul>
-<p class="dim">非官方工具，只读不写。官方接口随时可能变化。</p>
+<p class="dim">验证 B（官方周报页：大红收藏进度、周报、好友周报）暂缓，以后要做时会让扩展自己开竖长小窗口。非官方工具，只读不写。官方接口随时可能变化。</p>
 </body></html>
 `;
 writeFileSync(join(dist, 'install.html'), html);

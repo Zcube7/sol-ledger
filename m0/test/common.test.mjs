@@ -89,7 +89,7 @@ test('找值等于自己 ID 的字段名', () => {
   assert.deepEqual([...dfpKeysEqualTo({ vopenid: '123', other: '9' }, '123')], ['vopenid']);
 });
 
-const SOURCES = ['common.js', 'probe-wegame.js', 'probe-ams.js'].map(read);
+const SOURCES = ['common.js', 'probe-wegame.js'].map(read);   // 验证 B（probe-ams.js）暂缓，已移除
 // 去掉注释再查；'https://…'、'//…' 里的 // 不当注释，否则同一行后面的代码整段漏检
 const stripComments = src => src.replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|[^:\\'"`])\/\/[^\n]*/gm, '$1');
 
@@ -101,11 +101,12 @@ function checkRedline(all) {
   }
   assert.ok(!/\b(window|document|navigator|globalThis|self)\s*\[/.test(all), '不许用 [] 动态取全局属性');
   assert.equal((all.match(/window\.open\(/g) || []).length, 1, 'window.open 只许出现在 dfpHandoff 里');
-  assert.deepEqual([...new Set([...all.matchAll(/\b[Mm]ilo\s*\.\s*([A-Za-z_$]+)/g)].map(m => m[1]))], ['emit'], 'Milo 只许用 emit');
+  // 借官方页面的 Milo 时只许用 emit（现在没有地方用 Milo；以后恢复验证 B 时这条照样管用）
+  assert.ok([...all.matchAll(/\b[Mm]ilo\s*\.\s*([A-Za-z_$]+)/g)].every(m => m[1] === 'emit'), 'Milo 只许用 emit');
   assert.deepEqual([...all.matchAll(/dfpCookieFlag\s*\(\s*([^)]*)\)/g)].map(m => m[1].trim()), ['name', "'tgp_user_type'"], 'dfpCookieFlag 只许「定义 + 读 tgp_user_type 一次」，不管用哪种引号');
   // 不许直接读 document.cookie 的值（只允许 common.js 里两个只看名字 / 标记位的函数）
   const cookieUses = all.match(/document\.cookie/g) || [];
-  assert.equal(cookieUses.length, 2, 'document.cookie 只能出现在 dfpCookieFlag / dfpCookiePresent 里');
+  assert.equal(cookieUses.length, 1, 'document.cookie 只能出现在 dfpCookieFlag 里');
   // dfpCookieFlag 只许用来读 tgp_user_type
   const flagCalls = [...all.matchAll(/dfpCookieFlag\('([^']+)'\)/g)].map(m => m[1]);
   assert.deepEqual(flagCalls, ['tgp_user_type']);
@@ -135,7 +136,7 @@ test('扩展正式版：只要官方页面的权限，不含本地模拟环境�
   const dir = join(here, '..', 'dist', 'ext');   // 先跑 node m0/build.mjs
   const m = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
   assert.deepEqual([...m.permissions].sort(), ['scripting', 'storage']);
-  assert.deepEqual(m.host_permissions, ['https://www.wegame.com.cn/helper/df/*', 'https://df.qq.com/cp/*']);
+  assert.deepEqual(m.host_permissions, ['https://www.wegame.com.cn/helper/df/*']);   // 验证 B 暂缓，不再要 df.qq.com
   assert.equal(m.externally_connectable, undefined, '不开放给任意网页直接连');
   assert.deepEqual(m.content_scripts.map(c => c.js), [['site-bridge.js']]);
   const cfg = readFileSync(join(dir, 'config.js'), 'utf8');

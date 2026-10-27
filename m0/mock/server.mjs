@@ -1,11 +1,10 @@
-// 本地模拟环境：模拟 WeGame 助手页、官方周报页和它们用到的接口，用来自测两个书签。
+// 本地模拟环境：模拟 WeGame 助手页和它用到的接口，用来自测书签 / 扩展（验证 B 的官方周报页模拟已随 B 暂缓一起移除）。
 // 数据全是编造的。只监听 127.0.0.1:8770。
-// 用法：node m0/mock/server.mjs   然后打开 http://127.0.0.1:8770/helper/df/score/ 或 /cp/weekly/
+// 用法：node m0/mock/server.mjs   然后打开 http://127.0.0.1:8770/helper/df/score/
 // 页面地址可以带这些参数，测试各种「立刻停止」和兜底：
 //   WeGame 页：?captcha=1 第一次拉战绩列表就要人机校验；?captcha=paging 只在翻页试验时要人机校验；
 //              ?role8000102=1 QQ 类型查角色返回 8000102（书签应换微信类型再试一次）；
 //              ?expired=1 查角色返回 8025004「登录信息过期」（应立刻停，不再试另一种账号类型）
-//   周报页：  ?stall=2 第 2 个请求 Milo 不回调（模拟弹验证码 / 登录框）；?noOapI101=1 NoOapI 方法返回 101
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -85,35 +84,6 @@ const harness = (title, script, extraHead = '') => `<!doctype html><html lang="z
 <button id="run" onclick="var s=document.createElement('script');s.src='${script}?'+Date.now();document.body.appendChild(s)">运行书签</button>
 </body></html>`;
 
-const MILO_MOCK = `<script>
-document.cookie = 'openid=mock; path=/'; document.cookie = 'acctype=qc; path=/';
-window.getLastWeekDate = function () { return '20261025'; };
-var Q = new URLSearchParams(location.search), N = 0;
-window.Milo = { emit: function (flow) {
-  var s = flow.sData, m = s.method, d = null;
-  N += 1;
-  if (Q.get('stall') === String(N)) return;   // 不回调：真实 Milo 弹验证码 / 登录框时就是这样
-  // 照官方格式校验 sData：KfXJwH 是周报页 request() 的格式；NoOapI 是 H5 工具助手的格式（source 5、没有 sArea、param 里只有业务参数）
-  var badFormat = flow.token === 'NoOapI'
-    ? (s.source !== 5 || 'sArea' in s || /"(source|method)"/.test(s.param) || Object.keys(s).sort().join() !== 'method,param,source')
-    : (s.source !== '5' || s.sArea !== 36 || JSON.parse(s.param).method !== m);
-  if (badFormat) { setTimeout(function () { flow.fail({ iRet: 190001, sMsg: '参数错误' }); }, 80); return; }
-  if (flow.token === 'NoOapI' && Q.get('noOapI101') === '1') { setTimeout(function () { flow.fail({ iRet: 101, sMsg: '请先登录' }); }, 80); return; }
-  if (m === 'dfm/weekly.sol.record') d = { solDetail: { total_sol_num: '12', CarryOut_highprice_list: '15080050001,1,1500000#15080050002,1,900000' } };
-  if (m === 'dfm/weekly.sol.highlights') d = { max_GainedPrice_Mapid: '2201', max_GainedPrice_dtEventTime: '2026-10-20 21:00:00' };
-  if (m === 'dfm/weekly.sol.friend.record') d = { friends_sol_record: [
-      { friend_openid: '${MATE1}', Friend_total_sol_num: '5', Friend_is_Escape1_num: '3', Friend_Sum_Gained_Price: '888888' },
-      { friend_openid: '144115219000000099', Friend_total_sol_num: '1', Friend_is_Escape1_num: '0', Friend_Sum_Gained_Price: '0' } ],
-      by_friend: { '${MATE1}': { n: 5 }, '144115219000000099': { n: 1 } } };
-  if (m === 'dfm/center.person.resource') d = { solDetail: { totalFight: 120, totalEscape: 66, redCollectionDetail: [ { objectID: 15080050001, count: 2 }, { objectID: 15080050002, count: 0 } ] } };
-  if (m === 'dfm/center.person.redcollection') d = { title: '测试称号', objectCount: 1, totalCount: 2, totalMoney: 3000000 };
-  if (m === 'dfm/center.recent.detail') d = { solDetail: { recentGainDate: '2026-10-25', recentGain: 123456, userCollectionTop: { list: [ { objectID: 15080050001 } ] } } };
-  setTimeout(function () {
-    if (d) flow.success({ iRet: 0, sMsg: 'ok', details: { jData: { data: { code: 0, data: d } } } });
-    else flow.fail({ iRet: 190001, sMsg: '参数错误' });
-  }, 80);
-} };
-</script>`;
 
 createServer((req, res) => {
   const url = new URL(req.url, `http://127.0.0.1:${PORT}`);
@@ -122,7 +92,6 @@ createServer((req, res) => {
     res.setHeader('Set-Cookie', 'tgp_user_type=0; Path=/');
     return send(200, 'text/html; charset=utf-8', harness('WeGame 助手', '/bm/A.js'));
   }
-  if (req.method === 'GET' && url.pathname === '/cp/weekly/') return send(200, 'text/html; charset=utf-8', harness('官方周报页', '/bm/B.js', MILO_MOCK));
   if (req.method === 'GET' && url.pathname.startsWith('/bm/')) {
     const id = url.pathname.endsWith('A.js') ? 'A' : 'B';
     // 自测时把 ?captcha=1 透传给接口
@@ -149,4 +118,4 @@ createServer((req, res) => {
     return;
   }
   send(404, 'text/plain', 'not found');
-}).listen(PORT, '127.0.0.1', () => console.log(`M0 模拟环境：http://127.0.0.1:${PORT}/helper/df/score/  和  /cp/weekly/`));
+}).listen(PORT, '127.0.0.1', () => console.log(`M0 模拟环境：http://127.0.0.1:${PORT}/helper/df/score/`));

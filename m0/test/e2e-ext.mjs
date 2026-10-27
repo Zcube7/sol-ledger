@@ -1,6 +1,6 @@
 // 扩展端到端自测：无头 Edge 加载 dist/ext-dev（开发版扩展，多了本地模拟环境的权限），在模拟环境里跑完整流程：
-//   弹窗发起 A → 关掉弹窗后台照样跑完 → 结果进扩展存储 → B → 本机接收页通过 site-bridge 读到两份报告（W6 / W7）
-//   → 翻页时才要人机校验 → Milo 不回调立刻停 → 普通网页没法跟扩展说话。
+//   弹窗发起 A → 关掉弹窗后台照样跑完 → 结果进扩展存储 → 本机接收页通过 site-bridge 读到报告（W7）
+//   → 网站只能读和清 → 翻页时才要人机校验 → 后台中途被停 → 普通网页没法跟扩展说话。验证 B 暂缓，相关用例已移除。
 // 前提：已运行 node m0/build.mjs，并启动了 node m0/mock/server.mjs（8770）和 node m0/serve.mjs（8766）。
 // 用法：node m0/test/e2e-ext.mjs
 import assert from 'node:assert/strict';
@@ -56,22 +56,12 @@ try {
   check('扩展 A：队友哈希只有 12 位十六进制', () => assert.ok(A.result.privateOnly.teammateIdHashes.length > 0 && A.result.privateOnly.teammateIdHashes.every(h => /^[0-9a-f]{12}$/.test(h))));
   check('扩展 A：弹窗显示完成', () => assert.match(A.popupText, /A · WeGame 助手[\s\S]*完成/));
 
-  // ---- B ----
-  const B = await runViaPopup('B');
-  check('扩展 B：后台跑完', () => assert.equal(B.status.state, 'done', JSON.stringify(B.status)));
-  check('扩展 B：周报、好友、个人中心、大红、日报都取到数', () => {
-    const w = B.result.report.findings.W5;
-    for (const k of ['weekly.sol.record', 'weekly.sol.highlights', 'weekly.sol.friend.record', 'center.person.resource', 'center.person.redcollection', 'center.recent.detail']) assert.equal(w[k], true, k);
-  });
-  check('扩展 B：结构摘要本身不带值（自检替换 0 处）', () => assert.equal(B.result.leaked, 0));
-  check('扩展 B：存储里没有任何模拟的 ID / 昵称', () => { const t = JSON.stringify(B.result); for (const f of FORBIDDEN) assert.ok(!t.includes(f), f); });
-
-  // ---- W6 / W7：本机接收页通过 site-bridge 从扩展读两份报告 ----
+  // ---- W7：本机接收页通过 site-bridge 从扩展读报告 ----
   const r = await b.openPage('http://127.0.0.1:8766/receiver.html?test=1');
-  await b.waitFor(r.sessionId, `/书签 B\t已收到/.test(document.body.innerText)`, 20000).catch(e => fail('接收页没读到扩展里的报告：' + e.message));
+  await b.waitFor(r.sessionId, `/验证 A\t已收到/.test(document.body.innerText)`, 20000).catch(e => fail('接收页没读到扩展里的报告：' + e.message));
   const recvText = await b.evalIn(r.sessionId, 'document.body.innerText');
-  check('W7：接收页从扩展读到 A、B 两份报告', () => assert.match(recvText, /书签 A\t已收到（[^）]*来自 SolLedger 扩展）[\s\S]*书签 B\t已收到（[^）]*来自 SolLedger 扩展）/));
-  check('W6：按人去重后算出队友 2 个、好友 2 个、重合 1 个', () => assert.match(recvText, /队友 2 个、好友 2 个，重合 1 个/));
+  check('W7：接收页从扩展读到 A 的报告', () => assert.match(recvText, /验证 A\t已收到（[^）]*来自 SolLedger 扩展）/));
+  check('接收页：按人去重后数出队友 2 人', () => assert.match(recvText, /一起组队的有 2 人/));
   check('接收页：页面上没有模拟的 ID / 昵称', () => { for (const f of FORBIDDEN) assert.ok(!recvText.includes(f), f); });
 
   // ---- 网站一侧只能读和清：拿到的是带本机密钥的代号（不是原始哈希），也不能发起取数 ----
@@ -89,7 +79,7 @@ try {
     assert.ok(got.every(h => /^[0-9a-f]{12}$/.test(h) && !raw.includes(h)), JSON.stringify({ raw, got }));
   });
   const viaSite2 = await askSite(r.sessionId, 'get-reports');
-  check('网站两次读取的代号一样（W6 跨读取也能比）', () => assert.deepEqual(viaSite2.resp.A.privateOnly, viaSite.resp.A.privateOnly));
+  check('网站两次读取的代号一样（以后跨次同步也能认出同一个队友）', () => assert.deepEqual(viaSite2.resp.A.privateOnly, viaSite.resp.A.privateOnly));
   const pagesBefore = (await b.targets()).filter(t => t.type === 'page').length;
   const runFromSite = await askSite(r.sessionId, 'run', 'A');
   await sleep(1500);
@@ -132,31 +122,25 @@ try {
   {
     const p = await b.openPage(popupUrl);
     await b.waitFor(p.sessionId, `document.readyState === 'complete' && !!(chrome.runtime && chrome.runtime.sendMessage)`);
-    await b.evalIn(p.sessionId, `chrome.storage.local.remove(['status_B', 'result_B']).then(() => true)`);
-    await b.evalIn(p.sessionId, `chrome.runtime.sendMessage({ type: 'run', probe: 'B' }).catch(() => {}); true`);
+    await b.evalIn(p.sessionId, `chrome.storage.local.remove(['status_A', 'result_A']).then(() => true)`);
+    await b.evalIn(p.sessionId, `chrome.runtime.sendMessage({ type: 'run', probe: 'A' }).catch(() => {}); true`);
     await sleep(3000);
     await b.send('ServiceWorker.enable', {}, p.sessionId);
     await b.send('ServiceWorker.stopAllWorkers', {}, p.sessionId);
     await sleep(1000);
     await b.send('Target.closeTarget', { targetId: p.targetId });
     const q = await b.openPage(popupUrl);
-    await b.waitFor(q.sessionId, `chrome.storage.local.get('status_B').then(s => s.status_B && s.status_B.state === 'error')`, 10000).catch(() => {});
+    await b.waitFor(q.sessionId, `chrome.storage.local.get('status_A').then(s => s.status_A && s.status_A.state === 'error')`, 10000).catch(() => {});
     await sleep(300);
-    const st = await b.evalIn(q.sessionId, `chrome.storage.local.get('status_B').then(s => s.status_B)`);
-    const disabled = await b.evalIn(q.sessionId, `document.querySelector('.card[data-probe="B"] [data-act="run"]').disabled`);
-    check('后台中途被停：状态改成「中断」，「跑验证 B」按钮能再点', () => {
+    const st = await b.evalIn(q.sessionId, `chrome.storage.local.get('status_A').then(s => s.status_A)`);
+    const disabled = await b.evalIn(q.sessionId, `document.querySelector('.card[data-probe="A"] [data-act="run"]').disabled`);
+    check('后台中途被停：状态改成「中断」，「跑验证 A」按钮能再点', () => {
       assert.equal(st && st.error, 'interrupted', JSON.stringify(st));
       assert.equal(disabled, false);
     });
     await b.send('Target.closeTarget', { targetId: q.targetId });
   }
 
-  // ---- 书签 B：Milo 不回调（弹验证码 / 登录框）→ 15 秒后停，后面的请求一个都不发 ----
-  const F = await runViaPopup('B', '?stall=2');
-  check('扩展 · Milo 不回调：停下且只发了 2 个请求', () => {
-    assert.equal(F.result.report.stop, 'captcha_or_timeout');
-    assert.equal(F.result.report.steps.length, 2);
-  });
 } catch (e) {
   fail('运行出错：' + e.message);
 } finally {

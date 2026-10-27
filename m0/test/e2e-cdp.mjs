@@ -1,5 +1,5 @@
 // 端到端自测：用本机 Edge（无头）+ Chrome DevTools 协议，在模拟环境里完整跑一遍
-//   书签 A → 交接给接收页 → 书签 B → 交接 → 接收页比对（W6）；再跑一次「人机校验立刻停」。
+//   书签 A → 交接给接收页（W7）；再跑各种「立刻停」场景。验证 B 暂缓，相关用例已移除。
 // 前提：已运行 node m0/build.mjs，并启动了 node m0/mock/server.mjs（8770）和 node m0/serve.mjs（8766）。
 // 用法：node m0/test/e2e-cdp.mjs
 import { spawn } from 'node:child_process';
@@ -120,28 +120,9 @@ try {
   let rs = null;
   for (let i = 0; i < 30 && !rs; i++) { await sleep(300); rs = await receiverSession(); }
   check('W7：书签 A 弹出了接收页', () => assert.ok(rs));
-  if (rs) await waitFor(rs, `document.body.innerText.includes('已收到书签 A')`, 15000);
-
-  // ---- 书签 B ----
-  const B = await runProbe('http://127.0.0.1:8770/cp/weekly/');
-  check('B：借到了 Milo', () => assert.equal(B.report.findings.W4.miloEmit, true));
-  check('B：周报、好友、个人中心、大红、日报都取到数；第三方方法失败', () => {
-    const w = B.report.findings.W5;
-    for (const k of ['weekly.sol.record', 'weekly.sol.highlights', 'weekly.sol.friend.record', 'center.person.resource', 'center.person.redcollection', 'center.recent.detail']) assert.equal(w[k], true, k);
-    assert.equal(w['center.recent.redUnlockRecord'], false);
-  });
-  check('B：认出好友 ID 字段', () => assert.equal(B.report.findings.friendRecord.friendIdKey, 'friend_openid'));
-  check('B：认出 redCollectionDetail', () => assert.equal(B.report.findings.personResource.redCollectionDetail.count, 2));
-  check('B：报告里没有任何模拟的 ID / 昵称', () => { for (const f of FORBIDDEN) assert.ok(!B.text.includes(f), f); });
-  check('B：用好友 ID 当键的字典只留键的形态', () => assert.ok(B.text.includes('<键:digits(18)>')));
-  check('B：每一步都记了业务码', () => assert.ok(B.report.steps.filter(s => s.ok).every(s => s.bizCode === 0)));
-
-  await evalIn(B.page.sessionId, 'window.__DFP_TEST_HOOKS.handoff()', true);
-  await sleep(1500);
-  const rs2 = await receiverSession();
-  if (rs2) await waitFor(rs2, `/书签 B	已收到/.test(document.body.innerText)`, 15000);   // 任一接收页都会随存储变化刷新
-  const recvText = rs2 ? await evalIn(rs2, 'document.body.innerText') : '';
-  check('W6：接收页按人去重后算出队友 2 个、好友 2 个、重合 1 个', () => assert.match(recvText, /队友 2 个、好友 2 个，重合 1 个/));
+  if (rs) await waitFor(rs, `/验证 A\t已收到/.test(document.body.innerText)`, 15000);
+  const recvText = rs ? await evalIn(rs, 'document.body.innerText') : '';
+  check('W7：接收页收到 A，按人去重后数出队友 2 人', () => assert.match(recvText, /一起组队的有 2 人/));
   check('接收页：原始报告区域里也没有模拟的 ID / 昵称', () => { for (const f of FORBIDDEN) assert.ok(!recvText.includes(f), f); });
 
   // ---- 人机校验：立刻停 ----
@@ -179,21 +160,6 @@ try {
     assert.equal(X.report.steps[0].code, 8025004);
   });
 
-  // ---- 书签 B：Milo 不回调（弹验证码 / 登录框）就立刻停 ----
-  const F = await runProbe('http://127.0.0.1:8770/cp/weekly/?stall=2');
-  check('Milo 不回调：15 秒后停下，后面的请求一个都不发', () => {
-    assert.equal(F.report.stop, 'captcha_or_timeout');
-    assert.equal(F.report.steps.length, 2);
-    assert.equal(F.report.steps[1].iRet, 'timeout');
-  });
-
-  // ---- 书签 B：周报能用、NoOapI 返回 101：不让用户重新登录，单独记一个原因 ----
-  const G = await runProbe('http://127.0.0.1:8770/cp/weekly/?noOapI101=1');
-  check('NoOapI 101：周报 3 个方法照样取到，NoOapI 只试 1 次就停', () => {
-    assert.equal(G.report.stop, 'noOapI_101_after_kfxjwh_ok');
-    for (const k of ['weekly.sol.record', 'weekly.sol.highlights', 'weekly.sol.friend.record']) assert.equal(G.report.findings.W5[k], true, k);
-    assert.equal(G.report.steps.filter(s => s.token === 'NoOapI').length, 1);
-  });
 } catch (e) {
   results.push(['FAIL', '运行出错：' + e.message]);
 } finally {

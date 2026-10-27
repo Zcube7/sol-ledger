@@ -5,10 +5,6 @@ export const CONFIG = {
     "A": {
       "url": "https://www.wegame.com.cn/helper/df/score/",
       "match": "https://www.wegame.com.cn/helper/df/score/*"
-    },
-    "B": {
-      "url": "https://df.qq.com/cp/weekly20250821/index.html",
-      "match": "https://df.qq.com/cp/weekly20250821/*"
     }
   },
   "siteOrigins": [
