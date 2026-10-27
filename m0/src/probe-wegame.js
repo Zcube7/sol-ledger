@@ -11,10 +11,13 @@ const DFP_VERSION = 'm0-a-2';
 const DFP_ORIGIN = 'https://www.wegame.com.cn';
 
 if (location.origin !== DFP_ORIGIN && !dfpIsMock()) {
-  alert('请在 WeGame 助手页面上点这个书签：\nhttps://www.wegame.com.cn/helper/df/score/\n（先在那个页面登录 QQ 号）');
-  return;
+  if (DFP_MODE !== 'ext') alert('请在 WeGame 助手页面上点这个书签：\nhttps://www.wegame.com.cn/helper/df/score/\n（先在那个页面登录 QQ 号）');
+  return { error: 'wrong_page' };
 }
-if (window.__DFP_RUNNING) { alert('验证已经在运行了，请等它结束。'); return; }
+if (window.__DFP_RUNNING) {
+  if (DFP_MODE !== 'ext') alert('验证已经在运行了，请等它结束。');   // 扩展模式不弹框：alert 会卡住官方页面，原因由扩展弹窗显示
+  return { error: 'already_running' };
+}
 window.__DFP_RUNNING = true;
 
 const API = '/api/v1/wegame.pallas.dfm.DfmBattle/';
@@ -343,10 +346,14 @@ else panel.log('自检通过：报告里没有你的 ID、昵称或场次号。'
 const fname = `m0-A-wegame-${new Date().toISOString().slice(0, 10)}.json`;
 panel.enable('copy', async () => panel.log(await dfpCopy(text) ? '已复制，粘贴给我就行。' : '复制失败，请用「下载报告」。', 'dim'));
 panel.enable('download', () => dfpDownload(text, fname));
-panel.enable('handoff', () => dfpHandoff({ probe: 'A', report: JSON.parse(text), privateOnly }, panel));
+if (DFP_MODE !== 'ext') panel.enable('handoff', () => dfpHandoff({ probe: 'A', report: JSON.parse(text), privateOnly }, panel));
 if (dfpIsMock()) {
   window.__DFP_TEST_REPORT = text;     // 只在本地模拟页里暴露，供自动化测试检查有没有漏值
   window.__DFP_TEST_LEAKED = leaked;   // e2e 要断言它是 0：自检会把漏出来的值盖成 [已移除]，只查替换后的文本永远是绿的
 }
 window.__DFP_RUNNING = false;
+if (DFP_MODE === 'ext') {
+  panel.log('完成。结果已交给 SolLedger 扩展：可以在扩展弹窗里复制报告，或打开本机接收页看 W6 / W7。', 'dim');
+  return { probe: 'A', version: DFP_VERSION, report: JSON.parse(text), leaked, privateOnly };   // 交给扩展（executeScript 的返回值）
+}
 panel.log('完成。可以复制或下载报告；W7 需要先启动本机接收页。', 'dim');

@@ -190,6 +190,9 @@ function dfpScrub(reportJson, secrets) {
 /** 页面右上角的结果面板（放在 Shadow DOM 里，不受官方页面样式影响，也不改官方页面） */
 function dfpMakePanel(title) {
   const host = document.createElement('div');
+  // 同一个页面里跑第二次（扩展复用已打开的官方标签页，或再点一次书签）时先收掉上一次的面板，免得两块叠在一起
+  const old = document.getElementById('dfp-m0-panel');
+  if (old) old.remove();
   host.id = 'dfp-m0-panel';
   host.style.cssText = 'position:fixed;top:12px;right:12px;z-index:2147483647;';
   const root = host.attachShadow({ mode: 'closed' });
@@ -218,6 +221,8 @@ function dfpMakePanel(title) {
       </div>
     </div>`;
   root.querySelector('.hd span').textContent = title;
+  // 扩展模式下结果直接交给扩展，不需要「测试交接」按钮（DFP_MODE 由打包脚本在外层声明）
+  if (typeof DFP_MODE !== 'undefined' && DFP_MODE === 'ext') root.querySelector('button[data-act="handoff"]').remove();
   document.documentElement.appendChild(host);
   const logEl = root.querySelector('.log');
   const handlers = {};

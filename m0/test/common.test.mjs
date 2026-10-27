@@ -123,6 +123,26 @@ test('红线：书签源码不碰登录凭据', () => {
   checkRedline(stripComments(SOURCES.join('\n')));
 });
 
+test('红线：扩展自己不发请求、不碰 Cookie、不改请求头', () => {
+  const ext = ['background.js', 'popup.js', 'site-bridge.js']
+    .map(f => stripComments(readFileSync(join(here, '..', 'ext', f), 'utf8'))).join('\n');
+  for (const bad of ['fetch(', 'XMLHttpRequest', 'WebSocket', 'sendBeacon', 'document.cookie', 'chrome.cookies', 'webRequest', 'declarativeNetRequest', 'eval(', 'new Function']) {
+    assert.ok(!ext.includes(bad), `扩展源码里出现了 ${bad}`);
+  }
+});
+
+test('扩展正式版：只要官方页面的权限，不含本地模拟环境，不是开发版', () => {
+  const dir = join(here, '..', 'dist', 'ext');   // 先跑 node m0/build.mjs
+  const m = JSON.parse(readFileSync(join(dir, 'manifest.json'), 'utf8'));
+  assert.deepEqual([...m.permissions].sort(), ['scripting', 'storage']);
+  assert.deepEqual(m.host_permissions, ['https://www.wegame.com.cn/helper/df/*', 'https://df.qq.com/cp/*']);
+  assert.equal(m.externally_connectable, undefined, '不开放给任意网页直接连');
+  assert.deepEqual(m.content_scripts.map(c => c.js), [['site-bridge.js']]);
+  const cfg = readFileSync(join(dir, 'config.js'), 'utf8');
+  assert.match(cfg, /"dev": false/);
+  for (const t of [JSON.stringify(m), cfg]) assert.ok(!t.includes('8770'), '正式版里出现了本地模拟环境');
+});
+
 test('红线扫描本身管用：往源码里注入常见的泄漏写法，每一种都要被抓到', () => {
   const injections = [
     "const u = 'https://x.invalid/'; const c = document.cookie;",   // 写在 URL 字符串同一行，以前会被当成注释整段跳过

@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>SolLedger 数据助手</title>
+<style>
+  body{width:360px;margin:0;padding:12px 14px;font:13px/1.6 system-ui,-apple-system,"Microsoft YaHei",sans-serif;color:#111827}
+  h1{font-size:15px;margin:0 0 4px} .dim{color:#6b7280;font-size:12px}
+  .card{border:1px solid #e5e7eb;border-radius:8px;padding:8px 10px;margin:10px 0}
+  .row{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  button{padding:5px 10px;border-radius:6px;border:1px solid #d1d5db;background:#f9fafb;cursor:pointer;font:inherit}
+  button.primary{background:#1d4ed8;border-color:#1d4ed8;color:#fff}
+  button:disabled{opacity:.45;cursor:default}
+  .ok{color:#15803d}.warn{color:#b45309}.err{color:#b91c1c}
+  a{color:#1d4ed8}
+</style>
+</head>
+<body>
+<h1>SolLedger 数据助手 <span class="dim" id="ver"></span></h1>
+<div class="dim">在官方页面里查你自己的烽火地带数据，报告只含字段名、类型、条数和错误码，不含 ID、昵称、战绩数值和登录凭据。</div>
+
+<div class="card" data-probe="A">
+  <b>A · WeGame 助手</b> <span class="dim">（约 40 秒）</span>
+  <div class="status dim">还没跑过</div>
+  <div class="row">
+    <button class="primary" data-act="run">跑验证 A</button>
+    <button data-act="copy" disabled>复制报告</button>
+  </div>
+</div>
+
+<div class="card" data-probe="B">
+  <b>B · 官方周报页</b> <span class="dim">（约 10 秒）</span>
+  <div class="status dim">还没跑过</div>
+  <div class="row">
+    <button class="primary" data-act="run">跑验证 B</button>
+    <button data-act="copy" disabled>复制报告</button>
+  </div>
+</div>
+
+<div class="dim">
+  点「跑验证」会打开对应的官方页面并在里面查数。没登录的话先在那个页面用 QQ 登录，再点一次。
+  页面如果弹出「选择大区 / 角色」的窗口，直接关掉，不要提交。
+</div>
+<div class="row">
+  <button data-act="receiver">打开本机接收页（W6 / W7）</button>
+  <button data-act="clear">清空扩展里的数据</button>
+</div>
+<script type="module" src="popup.js"></script>
+</body>
+</html>
