@@ -4,7 +4,7 @@ import { CONFIG } from './config.js';
 const STOP_TEXT = {
   captcha: '官方要求人机校验，已停止',
   captcha_or_timeout: '官方 15 秒没回应（多半弹了验证码或登录框），已停止',
-  not_login: '官方说未登录，请先在官方页面登录',
+  not_login: '官方说未登录或登录已过期：WeGame 页面请到 www.wegame.com.cn 右上角退出后重新登录，周报页请重新登录，然后再点一次',
   no_role: '没取到角色信息',
   no_milo: '页面上没有 Milo（确认是官方周报页）',
   noOapI_101_after_kfxjwh_ok: '个人中心那组方法返回 101（这是要验证的结果之一，不用重新登录）',

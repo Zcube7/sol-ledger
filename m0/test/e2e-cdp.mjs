@@ -171,6 +171,14 @@ try {
     assert.notEqual(E.report.stop, 'not_login');
   });
 
+  // ---- 登录过期（8025004，真机实测到的码）：当成未登录立刻停，不再试另一种账号类型 ----
+  const X = await runProbe('http://127.0.0.1:8770/helper/df/score/?expired=1');
+  check('8025004 登录过期：标记 not_login，只查了一次角色', () => {
+    assert.equal(X.report.stop, 'not_login');
+    assert.equal(X.report.steps.length, 1);
+    assert.equal(X.report.steps[0].code, 8025004);
+  });
+
   // ---- 书签 B：Milo 不回调（弹验证码 / 登录框）就立刻停 ----
   const F = await runProbe('http://127.0.0.1:8770/cp/weekly/?stall=2');
   check('Milo 不回调：15 秒后停下，后面的请求一个都不发', () => {

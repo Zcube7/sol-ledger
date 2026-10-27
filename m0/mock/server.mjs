@@ -3,7 +3,8 @@
 // 用法：node m0/mock/server.mjs   然后打开 http://127.0.0.1:8770/helper/df/score/ 或 /cp/weekly/
 // 页面地址可以带这些参数，测试各种「立刻停止」和兜底：
 //   WeGame 页：?captcha=1 第一次拉战绩列表就要人机校验；?captcha=paging 只在翻页试验时要人机校验；
-//              ?role8000102=1 QQ 类型查角色返回 8000102（书签应换微信类型再试一次）
+//              ?role8000102=1 QQ 类型查角色返回 8000102（书签应换微信类型再试一次）；
+//              ?expired=1 查角色返回 8025004「登录信息过期」（应立刻停，不再试另一种账号类型）
 //   周报页：  ?stall=2 第 2 个请求 Milo 不回调（模拟弹验证码 / 登录框）；?noOapI101=1 NoOapI 方法返回 101
 import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
@@ -33,6 +34,7 @@ const ok = extra => JSON.stringify(Object.assign({ result: { error_code: 0, erro
 function battle(method, body, url) {
   switch (method) {
     case 'GetRoleInfo':
+      if (url.searchParams.get('expired') === '1') return JSON.stringify({ result: { error_code: 8025004, error_message: '登录信息过期' } });
       if (url.searchParams.get('role8000102') === '1') {
         return body.account_type === 2
           ? ok({ role_info: { openid: SELF, area: 36, name: '测试玩家甲', level: 42 } })

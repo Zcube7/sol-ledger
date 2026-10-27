@@ -7,7 +7,7 @@
  * 验证项：W1（接口能不能调通）、W2（单局详情字段）、W3（战绩列表翻页）。
  * ========================================================================== */
 
-const DFP_VERSION = 'm0-a-2';
+const DFP_VERSION = 'm0-a-3';
 const DFP_ORIGIN = 'https://www.wegame.com.cn';
 
 if (location.origin !== DFP_ORIGIN && !dfpIsMock()) {
@@ -22,7 +22,8 @@ window.__DFP_RUNNING = true;
 
 const API = '/api/v1/wegame.pallas.dfm.DfmBattle/';
 const SEASON_API = '/api/rail/web/data_filter/game_config/query';
-const NOT_LOGIN = [8000102, 8000103, 1001001, 1001002];
+// 8025004「登录信息过期」：2026-10-27 真机实测，WeGame 主站还显示已登录、生涯页显示「无角色信息」时就是这个码
+const NOT_LOGIN = [8000102, 8000103, 1001001, 1001002, 8025004];
 const CAPTCHA = 8000022;
 const GAP_MS = 900;          // 两次请求之间的间隔
 const LIST_GAP_MS = 1500;    // 翻页试验时两次战绩列表请求之间的间隔：官方只给这个接口套了人机校验，放慢一点
@@ -70,9 +71,10 @@ async function call(label, url, body, headers) {
     if (step.code === CAPTCHA) {
       stopReason = 'captcha';
       panel.log('官方要求人机校验（8000022）。已停止，不会重试。请按 F5 刷新这个页面：页面加载战绩列表时如果弹出验证码，按提示完成；能正常看到自己的战绩后再点书签。', 'warn');
-    } else if (NOT_LOGIN.includes(step.code)) {
+    } else if (NOT_LOGIN.includes(step.code) || (step.code && /登录/.test(step.msg || ''))) {
       stopReason = 'not_login';
-      panel.log('官方说未登录。请先在这个页面用 QQ 登录，再点书签。', 'warn');
+      panel.log(`官方说未登录或登录已过期（错误码 ${step.code}）。请打开 https://www.wegame.com.cn/ ，在右上角退出后用 QQ 重新登录；` +
+        '回到生涯页刷新、能看到自己的战绩后再跑一次。', 'warn');
     }
     return j;
   } catch (e) {
