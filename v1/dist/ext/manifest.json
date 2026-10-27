@@ -1,0 +1,21 @@
+{
+  "manifest_version": 3,
+  "name": "SolLedger · 烽火战绩助手",
+  "version": "0.3.0",
+  "description": "在你登录着的 WeGame 三角洲助手页面里同步你自己的烽火地带战绩，按天汇总和好友一起玩的数据。数据只存在这个浏览器里。非官方工具。",
+  "minimum_chrome_version": "110",
+  "permissions": [
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://www.wegame.com.cn/helper/df/*"
+  ],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "打开当天好友战绩"
+  }
+}

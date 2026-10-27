@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>SolLedger · 当天好友战绩</title>
+<style>
+  :root{--fg:#111827;--dim:#6b7280;--line:#e5e7eb;--bg:#f9fafb;--ok:#15803d;--warn:#b45309;--err:#b91c1c;--acc:#1d4ed8}
+  body{font:14px/1.6 system-ui,-apple-system,"Microsoft YaHei",sans-serif;color:var(--fg);margin:0;background:#fff}
+  header{position:sticky;top:0;background:#fff;border-bottom:1px solid var(--line);padding:12px 20px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;z-index:1}
+  h1{font-size:17px;margin:0 12px 0 0}
+  main{padding:8px 20px 40px;max-width:1280px}
+  h2{font-size:15px;margin:22px 0 8px}
+  button{padding:5px 12px;border-radius:6px;border:1px solid #d1d5db;background:var(--bg);cursor:pointer;font:inherit}
+  button.primary{background:var(--acc);border-color:var(--acc);color:#fff}
+  button:disabled{opacity:.45;cursor:default}
+  input[type=date]{font:inherit;padding:4px 6px;border:1px solid #d1d5db;border-radius:6px}
+  label{display:inline-flex;gap:4px;align-items:center;color:var(--dim)}
+  #status{margin:10px 0 0;padding:8px 12px;border-radius:8px;background:var(--bg);color:var(--dim)}
+  #status.ok{color:var(--ok)} #status.warn{color:var(--warn)} #status.err{color:var(--err)}
+  table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+  th,td{border-bottom:1px solid var(--line);padding:6px 8px;text-align:right;white-space:nowrap;vertical-align:top}
+  th{color:var(--dim);font-weight:500;background:var(--bg)}
+  th:first-child,td:first-child,td.l,th.l{text-align:left}
+  tr.self td{background:#eff6ff}
+  td.mates{white-space:normal;text-align:left;min-width:320px}
+  .dim{color:var(--dim)} .small{font-size:12px}
+  .empty{color:var(--dim);padding:16px 0}
+</style>
+</head>
+<body>
+<header>
+  <h1>SolLedger · 当天好友战绩</h1>
+  <button id="prev" title="前一天">‹</button>
+  <input type="date" id="day">
+  <button id="next" title="后一天">›</button>
+  <button id="sync" class="primary">同步这一天</button>
+  <label><input type="checkbox" id="friendsOnly" checked> 只看同队 2 局以上的人</label>
+</header>
+<main>
+  <div id="status">选一个日期，点「同步这一天」。数据只存在这个浏览器里。</div>
+
+  <h2>每人汇总 <span class="dim small" id="sumNote"></span></h2>
+  <div id="summary"></div>
+
+  <h2>逐局</h2>
+  <div id="matches"></div>
+
+  <h2 class="dim small">说明</h2>
+  <div class="dim small" id="notes">
+    只统计烽火地带（不含全面战场、摸金潮），和官方一样不算地图编号 80 的对局。日期按北京时间、按开局时间算。
+    「我」这一行是我当天所有对局的合计；其他人是「和我同队的那几局」的合计。
+    「撤离成功」「击杀干员」「带出价值」「盈亏」和官方战绩页口径一致；「总击杀」（多半含击杀 AI）、「助攻」「救助」官方烽火界面不显示，含义按旧版官方小程序和第三方工具，仅供参考；
+    队友的「救助」偶尔会少记（第三方观察到单局详情里有时是 0）。
+    官方数据里没有「好友」标记，同队 2 局以上的人多半是一起组队的好友，只同队 1 局的多半是匹配到的路人。
+    同步时扩展会在后台打开 WeGame 助手页面查数据，查完自动关掉；需要你已经在 www.wegame.com.cn 登录。
+    <p><button id="clear">清空本机保存的战绩</button></p>
+  </div>
+</main>
+<script type="module" src="dashboard.js"></script>
+</body>
+</html>

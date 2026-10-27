@@ -13,3 +13,4 @@ tmp/
 
 # 扩展开发版：多了本地模拟环境的权限，只给自动化测试用
 m0/dist/ext-dev/
+v1/dist/ext-dev/
