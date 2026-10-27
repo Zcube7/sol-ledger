@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self' 'unsafe-inline'; style-src 'unsafe-inline'; img-src 'none'; connect-src 'none'">
+<title>M0 本机接收页</title>
+<style>
+  body{font:14px/1.6 system-ui,-apple-system,"Microsoft YaHei",sans-serif;max-width:880px;margin:24px auto;padding:0 16px;color:#111827}
+  h1{font-size:20px} h2{font-size:16px;margin-top:24px}
+  .card{border:1px solid #e5e7eb;border-radius:8px;padding:12px 16px;margin:12px 0}
+  .ok{color:#15803d}.warn{color:#b45309}.err{color:#b91c1c}.dim{color:#6b7280}
+  table{border-collapse:collapse;width:100%} td,th{border-bottom:1px solid #f3f4f6;padding:6px 8px;text-align:left;vertical-align:top}
+  button{padding:6px 12px;border-radius:6px;border:1px solid #d1d5db;background:#f9fafb;cursor:pointer}
+  pre{background:#f9fafb;padding:8px;border-radius:6px;overflow:auto;max-height:240px}
+</style>
+</head>
+<body>
+<h1>M0 本机接收页</h1>
+<p class="dim">这个页面只在你自己电脑上运行（127.0.0.1）。它接收书签 A / B 交过来的报告，存在本页的浏览器存储里，
+用来测试「书签 → 我们的网页」这一步交接（W7），并在本机比对好友 ID 和对局队友 ID 是不是同一套（W6）。
+哈希只在这里用，不会出现在下载的报告里。看完 W6 就点下面的「清空本页数据」，别让哈希一直留在浏览器里。</p>
+
+<div class="card" id="status">等待书签交接……（在书签面板里点「测试交接（W7）」）</div>
+
+<h2>结果</h2>
+<table id="results"><thead><tr><th>项</th><th>结果</th></tr></thead><tbody></tbody></table>
+
+<p>
+  <button id="download">下载合并报告（不含哈希）</button>
+  <button id="clear">清空本页数据</button>
+</p>
+
+<h2>原始报告（结构）</h2>
+<pre id="raw" class="dim">（还没有）</pre>
+
+<script>
+(function () {
+  'use strict';
+  var params = new URLSearchParams(location.search);
+  var ALLOWED = ['https://www.wegame.com.cn', 'https://df.qq.com'];
+  if (params.get('test') === '1') ALLOWED.push('http://127.0.0.1:8770');   // 只给本地模拟环境用
+  var KEY = 'dfp-m0-store';
+
+  function load() { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } }
+  function save(s) { localStorage.setItem(KEY, JSON.stringify(s)); }
+
+  function row(name, value, cls) {
+    var tr = document.createElement('tr');
+    var a = document.createElement('td'); a.textContent = name;
+    var b = document.createElement('td'); b.textContent = value; if (cls) b.className = cls;
+    tr.appendChild(a); tr.appendChild(b);
+    document.querySelector('#results tbody').appendChild(tr);
+  }
+
+  function render() {
+    var s = load();
+    document.querySelector('#results tbody').textContent = '';
+    var A = s.A && s.A.report, B = s.B && s.B.report;
+    row('W7 交接：书签 A', s.A ? '已收到（' + s.A.at + '）' : '未收到', s.A ? 'ok' : 'dim');
+    row('W7 交接：书签 B', s.B ? '已收到（' + s.B.at + '）' : '未收到', s.B ? 'ok' : 'dim');
+    if (A && A.findings && A.findings.W1) {
+      var w1 = A.findings.W1, okN = Object.keys(w1).filter(function (k) { return w1[k] === 'ok'; }).length;
+      row('W1 接口调通', okN + '/7 ' + JSON.stringify(w1), okN === 7 ? 'ok' : 'warn');
+    }
+    if (A && A.findings && A.findings.battleDetail && A.findings.battleDetail[0]) {
+      var d = A.findings.battleDetail[0];
+      row('W2 单局详情', 'sol_players ' + d.solPlayersCount + ' 人；ID 字段 ' + d.idKey + '；ID 形态 ' + JSON.stringify(d.idKinds) +
+        '；小队字段 ' + d.teamKey + '；像物品的字段 ' + d.itemLike.length + ' 处', d.solPlayersCount ? 'ok' : 'warn');
+    }
+    if (A && A.findings && A.findings.battleList) {
+      var w = A.findings.battleList.window || {};
+      row('W3 战绩翻页', w.cursorField ? ('游标=第' + w.cursorFromIndex + '条的 ' + w.cursorField + '，共 ' + w.uniqueMatches + ' 局，跨 ' + w.spanHours + ' 小时，停止原因 ' + w.stop) : '没试出游标', w.cursorField ? 'ok' : 'warn');
+    }
+    if (B && B.findings && B.findings.W4) row('W4 借用 Milo', B.findings.W4.miloEmit ? '可以' : '不行', B.findings.W4.miloEmit ? 'ok' : 'err');
+    if (B && B.findings && B.findings.W5) row('W5 各方法取数', JSON.stringify(B.findings.W5), 'dim');
+    if (s.A && s.B) {
+      var uniq = function (a) { return a.filter(function (x, i) { return a.indexOf(x) === i; }); };   // 去重：同一个人只算一次
+      var t = uniq(s.A.privateOnly && s.A.privateOnly.teammateIdHashes || []);
+      var f = uniq(s.B.privateOnly && s.B.privateOnly.friendIdHashes || []);
+      var hit = t.filter(function (h) { return f.indexOf(h) >= 0; }).length;
+      // 重合 0 不等于「不是同一套」：最近几局里可能恰好没有好友。所以把两边 ID 的形态（位数）也摆出来对照
+      var kinds = function (h) { return h ? Object.keys(h).join(' / ') : '未知'; };
+      var dk = A && A.findings && A.findings.battleDetail && A.findings.battleDetail[0];
+      var fk = B && B.findings && B.findings.friendRecord;
+      row('W6 好友 ID 与队友 ID 是否同一套', '队友 ' + t.length + ' 个、好友 ' + f.length + ' 个，重合 ' + hit + ' 个' +
+        (hit ? '（至少有一部分是同一套 ID）' : '（没有重合：可能不是同一套，也可能最近几局里恰好没有好友，需要再看）') +
+        '；ID 形态：队友 ' + kinds(dk && dk.idKinds) + '，好友 ' + kinds(fk && fk.friendIdKinds), hit ? 'ok' : 'warn');
+    }
+    if (A) row('书签 A 停止原因', A.stop || '正常跑完', A.stop ? 'warn' : 'ok');
+    if (B) row('书签 B 停止原因', B.stop || '正常跑完', B.stop ? 'warn' : 'ok');
+    var pub = {};
+    if (A) pub.A = A; if (B) pub.B = B;
+    document.getElementById('raw').textContent = Object.keys(pub).length ? JSON.stringify(pub, null, 2) : '（还没有）';
+  }
+
+  window.addEventListener('message', function (e) {
+    if (ALLOWED.indexOf(e.origin) < 0) return;
+    if (e.source !== window.opener) return;
+    var data = e.data;
+    if (!data || data.type !== 'dfp-report' || !data.payload) return;
+    var p = data.payload;
+    if (p.probe !== 'A' && p.probe !== 'B') return;
+    if (!p.report || p.report.tool !== 'sol-ledger-m0') return;
+    var s = load();
+    s[p.probe] = { at: new Date().toLocaleString(), from: e.origin, report: p.report, privateOnly: p.privateOnly || {} };
+    save(s);
+    var st = document.getElementById('status');
+    st.textContent = '已收到书签 ' + p.probe + ' 的报告（来自 ' + e.origin + '）。';
+    st.className = 'card ok';
+    render();
+  });
+
+  if (window.opener) {
+    // 「准备好了」也只发给白名单来源：用 * 的话任何网页 window.open 本页都能收到，等于告诉它「这台电脑在跑 M0 接收页」。
+    // opener 不在白名单时浏览器直接丢弃，不报错
+    ALLOWED.forEach(function (o) { window.opener.postMessage({ type: 'dfp-ready' }, o); });
+  }
+
+  document.getElementById('download').addEventListener('click', function () {
+    var s = load(), pub = {};
+    if (s.A) pub.A = s.A.report; if (s.B) pub.B = s.B.report;
+    var url = URL.createObjectURL(new Blob([JSON.stringify(pub, null, 2)], { type: 'application/json' }));
+    var a = document.createElement('a'); a.href = url; a.download = 'm0-combined.json'; a.click();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+  });
+  document.getElementById('clear').addEventListener('click', function () { localStorage.removeItem(KEY); render(); });
+  // 书签 A、B 各自会弹出一个接收页窗口；任何一个收到新报告，其他已打开的接收页也跟着刷新
+  window.addEventListener('storage', function (e) { if (e.key === KEY) render(); });
+  render();
+})();
+</script>
+</body>
+</html>

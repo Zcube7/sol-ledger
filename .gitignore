@@ -1,0 +1,12 @@
+node_modules/
+*.log
+.DS_Store
+Thumbs.db
+
+# 书签导出的报告：只给开发者看，不进仓库
+m0-*.json
+m0-combined.json
+
+# 本地临时文件
+tmp/
+.env
